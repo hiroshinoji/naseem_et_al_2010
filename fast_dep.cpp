@@ -1,5 +1,6 @@
 #include "hash_map"
 #include <stdio.h>
+#include <string.h>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -68,15 +69,20 @@ public:
 	hash_map<string, string> config;
 
 	vector<sentence> sents;
+  vector<sentence> test_sents;
 
 	int tsize;
 	int wsize;
 	int senlen;
+  // int test_senlen;
 	int Root;
 
-	void load_config();
-	void populate_rule_deps();
-	void load_data();
+	void load_config(string config_path);
+	void populate_rule_deps(vector<sentence>&);
+	void load_data(string config_path);
+  void load_sents();
+  void load_test_sents();
+  void load_sents_helper(vector<sentence>& target, string depes, string poses, string words);
 	void load_tagset_map();
 	void load_rules();
 	void load_neg_rules();
@@ -85,6 +91,8 @@ public:
 	void print_rule_results(bool);
 	void print_subtags();
 	void write_output();
+  void write_output_test();
+  void write_output_helper(vector<sentence>& sentences, string path);
 	void write_stats(bool);
 };
 
@@ -128,12 +136,18 @@ void data::load_tagset_map()
 			tok = strtok(NULL, " ");
 		}
 	}
-
 	for(int s = 0; s < sents.size(); s++)
 	{
 		for(int w = 0; w < sents[s].words.size(); w++)
 		{
 			sents[s].words[w].ctag = tag_map[sents[s].words[w].tag];
+		}
+	}
+  for(int s = 0; s < test_sents.size(); s++)
+	{
+		for(int w = 0; w < test_sents[s].words.size(); w++)
+		{
+			test_sents[s].words[w].ctag = tag_map[test_sents[s].words[w].tag];
 		}
 	}
 
@@ -226,7 +240,7 @@ void data::load_neg_rules()
 	}
 }
 struct span{int start; int end;};
-void data::populate_rule_deps()
+void data::populate_rule_deps(vector<sentence>& sents)
 {
 	for(int s = 0; s < sents.size(); s++)
 	{
@@ -337,41 +351,51 @@ void data::populate_rule_deps()
 
 void data::write_output()
 {
-	ofstream outf(config["out_put"].c_str());
-	for(int i = 0; i < sents.size(); i++)
+  write_output_helper(sents, "out_put");
+}
+
+void data::write_output_test()
+{
+  write_output_helper(test_sents, "output_test");
+}
+
+void data::write_output_helper(vector<sentence>& sentences, string path)
+{
+  ofstream outf(config[path].c_str());
+	for(int i = 0; i < sentences.size(); i++)
 	{
-		for(int j = 0; j < sents[i].words.size(); j++)
+		for(int j = 0; j < sentences[i].words.size(); j++)
 		{
-			outf<<j<<":"<<words[sents[i].words[j].word]<<"/"<<gtags[sents[i].words[j].tag]<<"/"<<ctags[sents[i].words[j].ctag]<<" ";
+			outf<<j<<":"<<words[sentences[i].words[j].word]<<"/"<<gtags[sentences[i].words[j].tag]<<"/"<<ctags[sentences[i].words[j].ctag]<<" ";
 		}
 		
 		outf<<endl;outf<<"gold: ";
 		char head[10]; char arg[10];
-		for(int j = 0; j < sents[i].gdeps.size(); j++)
+		for(int j = 0; j < sentences[i].gdeps.size(); j++)
 		{
-			dep dp = sents[i].gdeps[j];
+			dep dp = sentences[i].gdeps[j];
 			itoa(dp.head_idx,head,10);
 			itoa(dp.arg_idx,arg,10);
 			outf<<head<<"-"<<arg<<" ";
 		}
 		outf<<endl;outf<<"rule: ";
-		for(int j = 0; j < sents[i].rdeps.size(); j++)
+		for(int j = 0; j < sentences[i].rdeps.size(); j++)
 		{
-			dep dp = sents[i].rdeps[j];
+			dep dp = sentences[i].rdeps[j];
 			itoa(dp.head_idx,head,10);
 			itoa(dp.arg_idx,arg,10);
 			outf<<head<<"-"<<arg<<" ";
 		}
 		outf<<endl;outf<<"pred: ";
-		for(int j = 0; j < sents[i].pdeps.size(); j++)
+		for(int j = 0; j < sentences[i].pdeps.size(); j++)
 		{
-			dep dp = sents[i].pdeps[j];
+			dep dp = sentences[i].pdeps[j];
 			itoa(dp.head_idx,head,10);
 			itoa(dp.arg_idx,arg,10);
 			outf<<head<<"-"<<arg<<" ";
 		}
 		outf<<endl<<endl;			
-	}
+	}  
 }
 
 void data::print_results(bool directed)
@@ -556,9 +580,10 @@ void data::write_stats(bool directed)
 	delete_arr_2D(tsize, dep_matrix_good);
 }
 
-void data::load_config()
+void data::load_config(string config_path)
 {
-	ifstream fcon("config");
+	// ifstream fcon("config");
+  ifstream fcon(config_path);
 	char line[500];
 	while( !fcon.eof() )
 	{
@@ -569,19 +594,46 @@ void data::load_config()
 	}
 }
 
-void data::load_data()
+void data::load_data(string config_path)
 {
-	load_config();
+	load_config(config_path);
 	
 	int last_word = 0;
 	word_map["#"] = 0;
 	words.push_back("#");
-		
-	senlen = 0;
 
-	ifstream fdep(config["deps"].c_str());
-	ifstream ftag(config["poses"].c_str());
-	ifstream fwrd(config["words"].c_str());
+  senlen = 0;
+  load_sents();
+  load_test_sents();
+	
+	tsize = gtags.size();
+	wsize = words.size();
+
+	// populate_rule_deps(sents);
+  // populate_rule_deps(test_sents);
+
+	load_tagset_map();
+
+	load_rules();
+	load_dir_rules();
+	load_neg_rules();
+}
+
+void data::load_sents()
+{
+  load_sents_helper(sents, "deps", "poses", "words");
+}
+
+void data::load_test_sents()
+{
+  load_sents_helper(test_sents, "test_deps", "test_poses", "test_words");
+}
+
+void data::load_sents_helper(vector<sentence>& target, string depes, string poses, string words_)
+{
+	ifstream fdep(config[depes].c_str());
+	ifstream ftag(config[poses].c_str());
+	ifstream fwrd(config[words_].c_str());
 
 	char tline[5000];
 	char dline[5000];
@@ -591,7 +643,6 @@ void data::load_data()
 	while(!ftag.eof() && sen_count < atoi(config["count"].c_str()))
 	{
 		sen_count++;
-
 		ftag.getline(tline,5000);
 		fdep.getline(dline,5000);
 		fwrd.getline(wline,5000);
@@ -664,20 +715,10 @@ void data::load_data()
 			tok = strtok(NULL, " ");
 		}
 
-		sents.push_back(s);
+		target.push_back(s);
 		if(s.words.size() > senlen)
 			senlen = s.words.size();
 	}
-
-	tsize = gtags.size();
-	wsize = words.size();
-	
-	populate_rule_deps();
-
-	load_tagset_map();
-	load_rules();
-	load_dir_rules();
-	load_neg_rules();
 }
 
 struct back_info
@@ -777,7 +818,7 @@ class model
 	void print_betas();
 	void print_subtags();
 public:
-	model();
+	model(string config_path);
 	~model();
 	void learn();
 	void Annotate();
@@ -877,10 +918,10 @@ model::~model()
 	//chart for cky
 	delete_arr_6D(slen, T, 3, 3, slen, back);
 }
-model::model()
+model::model(string config_path)
 {
-	d.load_data();
-	cout<<"loaded data\n";
+	d.load_data(config_path);
+	cout<<"loaded data"<<endl;
 
 	T     = atoi(d.config["T"].c_str());
 	tsize = d.tsize;
@@ -2475,6 +2516,12 @@ void model::learn()
         }
 		cout<<"round .... "<<round<<endl;
 	}
+
+  for (int i = 0; i < d.test_sents.size(); i++) {
+    CKY(d.test_sents[i]);
+  }
+  d.write_output_test();
+  
 }
 
 void model::output()
@@ -2487,12 +2534,13 @@ void model::output()
 	d.print_subtags();
 	print_subtags();
 }
-int main()
+int main(int argc, char *argv[])
 {
-	model m;
-	cout<<"Learning ..... \n";
+  string config_path = string(argv[1]);
+	model m(config_path);
+	cout<<"Learning ..... " << endl;
 	m.learn();
-	cout<<"Done ..... \n";	
+	cout<<"Done ..... " << endl;
 	return 0;
 }
 
