@@ -4,7 +4,7 @@ The original implementation can be found [here](http://groups.csail.mit.edu/rbg/
 
 The modifications are:
 - Support of training and test on different datasets; the original version can only perform both in the same datset. So for example you can train the model on sentences with maximum length 10 and test it on entire test sentences.
-- An example rules specific for Universal Dependencies (UD) (`rules_ud` and `map_ud`).
+- A set of example rules specific for Universal Dependencies (UD) (`rules_ud` and `map_ud`).
 - A script to train and test from conll style files (`train_test_ud.py`).
 
 ### Example usage
