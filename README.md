@@ -31,3 +31,7 @@ total: 479
 correct: 140
 ```
 
+In default, the script only uses sentences up to length 10 for training while 40 for test.
+You can customize this by modifying the head of the script.
+Also for efficiency, it imposes the maximum number of training, which can also be relaxed.
+These default numbers were used to produce the scores in [our paper](http://aclweb.org/anthology/D/D16/D16-1004.pdf).
